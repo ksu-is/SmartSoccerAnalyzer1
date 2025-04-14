@@ -1,52 +1,56 @@
 pip install requests beautifulsoup4
 
 import requests
-from bs4 import BeautifulSoup
 
-def search_sofascore_player(player_name):
-    search_url = f"https://www.sofascore.com/search?q={player_name.replace(' ', '%20')}"
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
-    res = requests.get(search_url, headers=headers)
-    soup = BeautifulSoup(res.text, 'html.parser')
+HEADERS = {
+    "User-Agent": "Mozilla/5.0"
+}
 
-    try:
-        player_path = soup.select_one('a[href^="/player/"]')['href']
-        return "https://www.sofascore.com" + player_path
-    except:
+def search_player(player_name):
+    url = f"https://api.sofascore.com/api/v1/search/all/{player_name.replace(' ', '%20')}"
+    res = requests.get(url, headers=HEADERS)
+    data = res.json()
+
+    # Find the first player result
+    players = data.get("players", [])
+    if not players:
+        print("Player not found.")
         return None
 
-def get_sofascore_stats(player_url):
-    res = requests.get(player_url, headers={"User-Agent": "Mozilla/5.0"})
-    soup = BeautifulSoup(res.text, 'html.parser')
+    player = players[0]
+    return player["slug"], player["id"]
 
-    print(f"\n📊 Stats for: {player_url}")
+def get_player_stats(slug, player_id):
+    stats_url = f"https://api.sofascore.com/api/v1/player/{player_id}/statistics/season"
+    res = requests.get(stats_url, headers=HEADERS)
+    data = res.json()
 
-    try:
-        player_name = soup.select_one("h1").text.strip()
-        print(f"\nPlayer: {player_name}")
+    stats = data["statistics"]
 
-        profile_items = soup.select(".sc-ecffda1b-0.eUvcrH p")
-        if profile_items:
-            print("Position:", profile_items[0].text)
-            print("Team:", profile_items[1].text)
+    print(f"\n📊 Stats for: {slug.replace('-', ' ').title()}")
 
-        stat_blocks = soup.select(".sc-aef7b5d7-0.kDObUw .sc-ecffda1b-0")
-        print("\n📈 Season Stats:")
-        for block in stat_blocks:
-            label = block.select_one("p.sc-ecffda1b-3").text
-            value = block.select_one("p.sc-ecffda1b-1").text
-            print(f"{label}: {value}")
-    except Exception as e:
-        print("⚠️ Could not parse stats.")
+    def get_stat(key):
+        return stats.get(key, {}).get("value", "N/A")
 
-def get_player_stats(player_name):
-    url = search_sofascore_player(player_name)
-    if url:
-        get_sofascore_stats(url)
-    else:
-        print("Player not found.")
+    print(f"Matches played: {get_stat('games')}")
+    print(f"Minutes played: {get_stat('minutes')}")
+    print(f"Goals: {get_stat('goals')}")
+    print(f"Assists: {get_stat('assists')}")
+    print(f"Expected Goals (xG): {get_stat('expectedGoals')}")
+    print(f"Expected Assists (xA): {get_stat('expectedAssists')}")
+    print(f"Shots: {get_stat('shotsTotal')}")
+    print(f"Key Passes: {get_stat('bigChancesCreated')}")
+    print(f"Interceptions: {get_stat('interceptions')}")
+    print(f"Tackles: {get_stat('tackles')}")
+    print(f"Rating: {get_stat('averageRating')}")
 
+
+def get_player_full_stats(player_name):
+    slug_id = search_player(player_name)
+    if slug_id:
+        slug, player_id = slug_id
+        get_player_stats(slug, player_id)
+
+# ▶️ Run the script
 player = input("Enter player name: ")
-get_player_stats(player)
+get_player_full_stats(player)
